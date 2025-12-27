@@ -8,7 +8,8 @@ fi
 # Ubuntu 24.04.3 kullan
 VERSION="24.04.3"
 SUITE="noble"
-MIRROR="http://archive.ubuntu.com/ubuntu"
+# ARM64 için ports.ubuntu.com kullan
+MIRROR="http://ports.ubuntu.com/ubuntu-ports"
 BASE_URL="https://cdimage.ubuntu.com/ubuntu-base/releases/24.04.3/release"
 
 truncate -s 6G rootfs.img
