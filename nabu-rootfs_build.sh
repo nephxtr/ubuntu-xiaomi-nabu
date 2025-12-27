@@ -1,22 +1,22 @@
 #!/bin/sh
 set -e
-
 if [ "$(id -u)" -ne 0 ]; then
   echo "rootfs can only be built as root"
   exit 1
 fi
 
-VERSION="24.04.3"
+# Ubuntu 24.04.1 kullan (24.04.3 henüz yok)
+VERSION="24.04.1"
 SUITE="noble"
 MIRROR="http://archive.ubuntu.com/ubuntu"
-BASE_URL="https://cdimage.ubuntu.com/ubuntu-base/releases/${VERSION}/release"
+BASE_URL="https://cdimage.ubuntu.com/ubuntu-base/releases/24.04.1/release"
 
 truncate -s 6G rootfs.img
 mkfs.ext4 rootfs.img
-
 mkdir -p rootdir
 mount -o loop rootfs.img rootdir
 
+# Doğru URL ile indir
 wget "${BASE_URL}/ubuntu-base-${VERSION}-base-arm64.tar.gz"
 tar xzf ubuntu-base-${VERSION}-base-arm64.tar.gz -C rootdir
 
@@ -46,10 +46,8 @@ deb ${MIRROR} ${SUITE}-security main restricted universe multiverse
 EOF
 
 export DEBIAN_FRONTEND=noninteractive
-
 chroot rootdir apt update
 chroot rootdir apt upgrade -y
-
 chroot rootdir apt install -y \
   sudo ssh nano bash-completion \
   ubuntu-desktop-minimal \
@@ -60,7 +58,6 @@ chroot rootdir apt install -y \
 # kernel & firmware debs
 mkdir -p rootdir/tmp
 cp xiaomi-nabu-debs_$2/*-xiaomi-nabu.deb rootdir/tmp/
-
 chroot rootdir dpkg -i /tmp/linux-xiaomi-nabu.deb || true
 chroot rootdir dpkg -i /tmp/firmware-xiaomi-nabu.deb || true
 chroot rootdir dpkg -i /tmp/alsa-xiaomi-nabu.deb || true
@@ -82,7 +79,6 @@ umount rootdir/proc
 umount rootdir/dev/pts
 umount rootdir/dev
 umount rootdir
-
 rm -rf rootdir
 
 7z a rootfs.7z rootfs.img
