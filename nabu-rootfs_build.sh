@@ -6,7 +6,7 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-VERSION="24.04"
+VERSION="24.04.3"
 SUITE="noble"
 MIRROR="http://archive.ubuntu.com/ubuntu"
 BASE_URL="https://cdimage.ubuntu.com/ubuntu-base/releases/${VERSION}/release"
