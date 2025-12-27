@@ -6,132 +6,83 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-DESKTOP="$1"          # ubuntu-desktop / ubuntu-desktop-minimal
-KERNEL="$2"           # 6.7-working
-SUITE="mantic"
+VERSION="24.04"
+SUITE="noble"
+MIRROR="http://archive.ubuntu.com/ubuntu"
+BASE_URL="https://cdimage.ubuntu.com/ubuntu-base/releases/${VERSION}/release"
 
-IMG=rootfs.img
-ROOT=rootdir
+truncate -s 6G rootfs.img
+mkfs.ext4 rootfs.img
 
-truncate -s 6G "$IMG"
-mkfs.ext4 "$IMG"
+mkdir -p rootdir
+mount -o loop rootfs.img rootdir
 
-mkdir -p "$ROOT"
-mount -o loop "$IMG" "$ROOT"
+wget "${BASE_URL}/ubuntu-base-${VERSION}-base-arm64.tar.gz"
+tar xzf ubuntu-base-${VERSION}-base-arm64.tar.gz -C rootdir
 
-# -------------------------------
-# MIRROR FALLBACK (EOL SAFE)
-# -------------------------------
-MIRRORS="
-http://mirror.ucu.ac.ug/ubuntu
-http://ke.mirror.ctrldev.net/ubuntu
-http://za.archive.ubuntu.com/ubuntu
-http://ftp.yzu.edu.tw/Linux/ubuntu
-"
+mount --bind /dev rootdir/dev
+mount --bind /dev/pts rootdir/dev/pts
+mount --bind /proc rootdir/proc
+mount --bind /sys rootdir/sys
 
-for m in $MIRRORS; do
-  echo "Testing mirror: $m"
-  if wget -q --spider "$m/dists/$SUITE/Release"; then
-    MIRROR="$m"
-    echo "Using mirror: $MIRROR"
-    break
-  fi
-done
+echo "nameserver 1.1.1.1" > rootdir/etc/resolv.conf
+echo "xiaomi-nabu" > rootdir/etc/hostname
 
-if [ -z "$MIRROR" ]; then
-  echo "No working mirror found"
-  exit 1
-fi
-
-# -------------------------------
-# BOOTSTRAP ROOTFS (CORRECT WAY)
-# -------------------------------
-debootstrap \
-  --arch=arm64 \
-  --foreign \
-  "$SUITE" \
-  "$ROOT" \
-  "$MIRROR"
-
-# -------------------------------
-# QEMU FOR CHROOT
-# -------------------------------
-if ! uname -m | grep -q aarch64; then
-  cp /usr/bin/qemu-aarch64-static "$ROOT/usr/bin/"
-fi
-
-mount --bind /dev "$ROOT/dev"
-mount --bind /dev/pts "$ROOT/dev/pts"
-mount --bind /proc "$ROOT/proc"
-mount --bind /sys "$ROOT/sys"
-
-chroot "$ROOT" /debootstrap/debootstrap --second-stage
-
-# -------------------------------
-# APT CONFIG
-# -------------------------------
-cat > "$ROOT/etc/apt/sources.list" <<EOF
-deb $MIRROR $SUITE main universe multiverse restricted
-deb $MIRROR $SUITE-updates main universe multiverse restricted
-deb $MIRROR $SUITE-security main universe multiverse restricted
+cat > rootdir/etc/hosts <<EOF
+127.0.0.1 localhost
+127.0.1.1 xiaomi-nabu
 EOF
 
-echo "nameserver 1.1.1.1" > "$ROOT/etc/resolv.conf"
-echo "xiaomi-nabu" > "$ROOT/etc/hostname"
+# qemu-user-static
+if ! uname -m | grep -q aarch64; then
+  apt install -y qemu-user-static binfmt-support
+fi
+
+# apt sources
+cat > rootdir/etc/apt/sources.list <<EOF
+deb ${MIRROR} ${SUITE} main restricted universe multiverse
+deb ${MIRROR} ${SUITE}-updates main restricted universe multiverse
+deb ${MIRROR} ${SUITE}-security main restricted universe multiverse
+EOF
 
 export DEBIAN_FRONTEND=noninteractive
 
-chroot "$ROOT" apt-get update
-chroot "$ROOT" apt-get upgrade -y
+chroot rootdir apt update
+chroot rootdir apt upgrade -y
 
-# -------------------------------
-# BASE PACKAGES
-# -------------------------------
-chroot "$ROOT" apt-get install -y \
+chroot rootdir apt install -y \
   sudo ssh nano bash-completion \
-  systemd-sysv dbus \
-  p7zip-full \
-  grub-efi-arm64
+  ubuntu-desktop-minimal \
+  grub-efi-arm64 \
+  alsa-ucm-conf \
+  rmtfs protection-domain-mapper tqftpserv
 
-# -------------------------------
-# DESKTOP (MINIMAL ÖNERİLİR)
-# -------------------------------
-if [ "$DESKTOP" = "ubuntu-desktop" ]; then
-  chroot "$ROOT" apt-get install -y ubuntu-desktop-minimal
-fi
+# kernel & firmware debs
+mkdir -p rootdir/tmp
+cp xiaomi-nabu-debs_$2/*-xiaomi-nabu.deb rootdir/tmp/
 
-# -------------------------------
-# DEVICE PACKAGES
-# -------------------------------
-chroot "$ROOT" apt-get install -y \
-  rmtfs protection-domain-mapper tqftpserv || true
+chroot rootdir dpkg -i /tmp/linux-xiaomi-nabu.deb || true
+chroot rootdir dpkg -i /tmp/firmware-xiaomi-nabu.deb || true
+chroot rootdir dpkg -i /tmp/alsa-xiaomi-nabu.deb || true
+chroot rootdir apt -f install -y
 
-sed -i '/ConditionKernelVersion/d' \
-  "$ROOT/lib/systemd/system/pd-mapper.service" || true
+# fstab
+cat > rootdir/etc/fstab <<EOF
+PARTLABEL=linux / ext4 errors=remount-ro,x-systemd.growfs 0 1
+PARTLABEL=esp /boot/efi vfat umask=0077 0 1
+EOF
 
-# -------------------------------
-# KERNEL DEBS
-# -------------------------------
-cp xiaomi-nabu-debs_"$KERNEL"/*-xiaomi-nabu.deb "$ROOT/tmp/"
-chroot "$ROOT" dpkg -i /tmp/*-xiaomi-nabu.deb || true
-rm -f "$ROOT/tmp/"*.deb
+mkdir -p rootdir/var/lib/gdm
+touch rootdir/var/lib/gdm/run-initial-setup
 
-# -------------------------------
-# CLEANUP
-# -------------------------------
-chroot "$ROOT" apt-get clean
+chroot rootdir apt clean
 
-umount "$ROOT/sys"
-umount "$ROOT/proc"
-umount "$ROOT/dev/pts"
-umount "$ROOT/dev"
-umount "$ROOT"
+umount rootdir/sys
+umount rootdir/proc
+umount rootdir/dev/pts
+umount rootdir/dev
+umount rootdir
 
-rmdir "$ROOT"
+rm -rf rootdir
 
-# -------------------------------
-# ARCHIVE (HOST SIDE)
-# -------------------------------
 7z a rootfs.7z rootfs.img
-
-echo 'cmdline: root=PARTLABEL=linux'
