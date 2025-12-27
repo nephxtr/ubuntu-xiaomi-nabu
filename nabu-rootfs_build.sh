@@ -13,7 +13,7 @@ mkfs.ext4 rootfs.img
 mkdir rootdir
 mount -o loop rootfs.img rootdir
 
-wget https://cdimage.ubuntu.com/ubuntu-base/releases/$VERSION/release/ubuntu-base-$VERSION-base-arm64.tar.gz
+wget http://mirror.ucu.ac.ug/ubuntu-cdimage/ubuntu-base/releases/$VERSION/release/ubuntu-base-$VERSION-base-arm64.tar.gz
 tar xzvf ubuntu-base-$VERSION-base-arm64.tar.gz -C rootdir
 #rm ubuntu-base-$VERSION-base-arm64.tar.gz
 
