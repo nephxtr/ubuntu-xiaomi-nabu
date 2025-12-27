@@ -5,11 +5,11 @@ if [ "$(id -u)" -ne 0 ]; then
   exit 1
 fi
 
-# Ubuntu 24.04.1 kullan (24.04.3 henüz yok)
-VERSION="24.04.1"
+# Ubuntu 24.04.3 kullan
+VERSION="24.04.3"
 SUITE="noble"
 MIRROR="http://archive.ubuntu.com/ubuntu"
-BASE_URL="https://cdimage.ubuntu.com/ubuntu-base/releases/24.04.1/release"
+BASE_URL="https://cdimage.ubuntu.com/ubuntu-base/releases/24.04.3/release"
 
 truncate -s 6G rootfs.img
 mkfs.ext4 rootfs.img
